@@ -1,0 +1,19 @@
+#cardContainer{
+    background-color: red;
+}
+.card{
+    border: solid 1px black;
+    max-width: 200px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 8px;
+    border-radius: 8px;
+    background-color: aliceblue;
+}
+
+img {
+  width: 100px;
+}
+
+

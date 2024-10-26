@@ -1,0 +1,34 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider          = "sqlite"
+  url               = "file:./dev.db"
+}
+
+model Character {
+  id               String            @id @unique @default(uuid())
+  name             String
+  age              Int
+  bio              String
+  image            String
+  powers           Powers[]
+  domainExpansions DomainExpansion[]
+}
+
+model Powers {
+  id          String     @id @default(cuid())
+  name        String
+  description String
+  Character   Character? @relation(fields: [characterId], references: [id])
+  characterId String?
+}
+
+model DomainExpansion {
+  id          String     @id @default(cuid())
+  name        String
+  description String
+  Character   Character? @relation(fields: [characterId], references: [id])
+  characterId String?
+}

@@ -1,125 +1,77 @@
+// src/controllers/domainExpansionsController.ts
+
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-import { z } from 'zod';
+import { z, ZodError } from 'zod';
+import prisma from '../client';
 
-const prisma = new PrismaClient();
+const pageDomainSchema = z.object({
+    page: z.string().optional(),
+});
 
-class domainsExpansionController {
+const paramsSchema = z.object({
+    id: z.string().cuid(),
+});
 
-	constructor() {}
- 
-	// função para listar todos os domínios de expansão
-	async listAllDomainsExpansion(req:Request, res:Response) {
+const domainCreateSchema = z.object({
+    name: z.string().min(3).max(255),
+    description: z.string().min(3).max(255),
+});
 
-		// valida a variavel page
-		const pageDomainSchema = z.object({
-			page: z.string().optional(),
-		});
+class DomainsExpansionController {
+    async listAllDomainsExpansion(req: Request, res: Response) {
+        try {
+            const { page = "1" } = pageDomainSchema.parse(req.query);
+            const currentPage = Number(page);
+            const limit = 10;
+            const countDomains = await prisma.domainExpansion.count();
 
-		// variavel para paginação inicializada com 1
-		let {page = 1} = pageDomainSchema.parse(req.query);
-		// converte a variavel page para number
-		page = Number(page);
+            if (countDomains === 0) {
+                return res.status(200).json({ message: 'Não há domínios de expansão cadastrados' });
+            }
 
-		// limite de domínios de expansão por pagina
-		const limitDomains = 10;
+            const lastPage = Math.ceil(countDomains / limit);
+            const allDomainsExpansion = await prisma.domainExpansion.findMany({
+                include: { Character: { select: { name: true } } },
+                skip: (currentPage - 1) * limit,
+                take: limit,
+            });
 
-		// ultima pagina
-		let lastDomainPage = 1;
+            const pagination = {
+                path: '/domainExpansions',
+                Current_Page: currentPage,
+                Next_Page: currentPage < lastPage ? currentPage + 1 : undefined,
+                prev_page: currentPage > 1 ? currentPage - 1 : undefined,
+                Last_Page: lastPage,
+                total_Domains: countDomains,
+            };
 
-		// conta o total de domínios de expansão cadastrados
-		const countDomains = await prisma.domainExpansion.count();
+            return res.status(200).json({ pagination, allDomainsExpansion });
+        } catch (error) {
+            if (error instanceof ZodError) {
+                return res.status(400).json({ error: 'Parâmetros inválidos.' });
+            }
+            console.error("Erro em listAllDomainsExpansion:", error);
+            return res.status(500).json({ error: 'Erro no servidor.' });
+        }
+    }
 
-		// verifica se há domínios de expansão cadastrados
-		if(countDomains != 0){
-			// calcula o total de paginas
-			lastDomainPage = Math.ceil(countDomains / limitDomains);
-		}else{
-			// retorna uma mensagem caso não haja domínios de expansão cadastrados
-			return res.status(200).json({message: 'Não há domínios de expansão cadastrados'});
-		}
+    async createDomainExpansion(req: Request, res: Response) {
+        const body = domainCreateSchema.safeParse(req.body);
+        if (!body.success) {
+            return res.status(400).json({ error: 'Dados inválidos.' });
+        }
 
-		// lista todos os domínios de expansão
-		const allDomainsExpansion = await prisma.domainExpansion.findMany({
-			include: {
-				// lista os personagens que possuem o domínio de expansão
-				Character: {
-					// seleciona apenas o nome do personagem
-					select: {
-						name: true,
-					}
-				}
-			},
-			skip: (page * limitDomains)-limitDomains,
-			// limite de domínios de expansão por pagina
-			take: limitDomains,
-		});
-		const paginationDomains = {	
-			// caminho para a paginação
-			path: '/DomainsExpansion',
-			// pagina atual
-			Current_Page: Number(page),
-			// proxima pagina
-			Next_Page: Number(page) < lastDomainPage? Number(page) + 1 : undefined,
-			// pagina anterior
-			prev_page: Number(page) > 1 ? Number(page) - 1 : undefined,
-			// ultima pagina
-			Last_Page: lastDomainPage,
-			// total de personagens
-			total_Domains: countDomains,
-		};
-		// retorna todos os domínios de expansão
-		return res.status(200).json({paginationDomains,allDomainsExpansion});
-	}
-
-	// função para listar um domínio de expansão
-	async listDomainsExpansion(req:Request, res:Response){
-
-		// verifica se o id é valido
-		const paramsSchema = z.object({
-			id: z.string().cuid(),
-		});
-
-		const {id} = paramsSchema.parse(req.params);
-
-		// verifica se o domínio de expansão existe
-		const domainsExpansion = await prisma.domainExpansion.findUniqueOrThrow({
-			where: {
-				id,
-			},
-			include: {
-				Character: true,
-			}
-		});
-
-		// retorna o domínio de expansão
-		return res.status(200).json({domainsExpansion});
-	}
-
-	//função para criar um domínio de expansão
-	async createDomainExpansion(res:Response, req:Request){
-		
-		// verifica se o corpo da requisição é valido
-		const bodySchema = z.object({
-			name: z.string().min(3).max(255),
-			description: z.string().min(3).max(255),
-		});
-
-		// verifica se o corpo da requisição é valido
-		const {name, description,} = bodySchema.parse(req.body);
-
-		// cria o domínio de expansão
-		const newDomainExpansion = await prisma.domainExpansion.create({
-			data: {
-				name,
-				description,
-			}
-		});
-
-		// retorna o domínio de expansão criado
-		return res.status(201).json({newDomainExpansion});
-	}
+        try {
+            const { name, description } = body.data;
+            const newDomain = await prisma.domainExpansion.create({
+                data: { name, description },
+            });
+            return res.status(201).json(newDomain);
+        } catch (error) {
+            console.error("Erro em createDomainExpansion:", error);
+            return res.status(400).json({ error: 'Erro ao criar o domínio de expansão.' });
+        }
+    }
 }
 
-
-export default new domainsExpansionController();
+export default new DomainsExpansionController();

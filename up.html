@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gerenciamento de Mangás</title>
+    <style>
+      /* Reset básico */
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f4f4f4;
+        padding: 20px;
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin-bottom: 10px;
+        color: #333;
+      }
+
+      .container {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      /* Formulário de Upload */
+      .upload-form {
+        background: #fff;
+        padding: 20px;
+        border-radius: 5px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      .upload-form label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+      }
+
+      .upload-form input[type="text"],
+      .upload-form input[type="file"] {
+        width: 100%;
+        padding: 8px;
+        margin-bottom: 15px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
+
+      .upload-form button {
+        padding: 10px 15px;
+        background: #28a745;
+        color: #fff;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+
+      .upload-form button:hover {
+        background: #218838;
+      }
+
+      /* Seções de Mangás e Capítulos */
+      .manga-list,
+      .chapter-list,
+      .image-gallery {
+        background: #fff;
+        padding: 20px;
+        border-radius: 5px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      .manga-item,
+      .chapter-item {
+        padding: 10px;
+        border-bottom: 1px solid #eee;
+        cursor: pointer;
+      }
+
+      .manga-item:hover,
+      .chapter-item:hover {
+        background: #f9f9f9;
+      }
+
+      .manga-item:last-child,
+      .chapter-item:last-child {
+        border-bottom: none;
+      }
+
+      /* Galeria de Imagens */
+      .image-gallery {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 10px;
+        margin-top: 20px;
+      }
+
+      .image-gallery img {
+        width: 100%;
+        border-radius: 4px;
+        object-fit: cover;
+      }
+
+      /* Responsividade */
+      @media (min-width: 768px) {
+        .container {
+          flex-direction: row;
+        }
+
+        .section {
+          flex: 1;
+          margin-right: 20px;
+        }
+
+        .section:last-child {
+          margin-right: 0;
+        }
+      }
+
+      /* Mensagens de Feedback */
+      .message {
+        padding: 10px;
+        margin-bottom: 20px;
+        border-radius: 4px;
+      }
+
+      .message.success {
+        background: #d4edda;
+        color: #155724;
+      }
+
+      .message.error {
+        background: #f8d7da;
+        color: #721c24;
+      }
+
+      /* Indicador de Carregamento */
+      .loading {
+        text-align: center;
+        margin-top: 20px;
+        font-weight: bold;
+        color: #555;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Gerenciamento de Mangás</h1>
+    <div class="container">
+      <!-- Formulário de Upload -->
+      <div class="section upload-form">
+        <h2>Adicionar Novo Capítulo</h2>
+        <form id="uploadForm" enctype="multipart/form-data">
+          <label for="number">Número do Capítulo:</label>
+          <input type="text" name="number" id="number" required />
+
+          <label for="title">Título do Capítulo:</label>
+          <input type="text" name="title" id="title" required />
+
+          <label for="images">Imagens:</label>
+          <input type="file" name="images" id="images" multiple required />
+
+          <button type="submit">Enviar Capítulo</button>
+        </form>
+        <div id="formMessage"></div>
+      </div>
+
+      <!-- Lista de Mangás -->
+      <div class="section manga-list">
+        <h2>Mangás Disponíveis</h2>
+        <div id="mangaList">
+          <!-- Mangás serão carregados aqui -->
+        </div>
+      </div>
+
+      <!-- Lista de Capítulos -->
+      <div class="section chapter-list">
+        <h2>Capítulos</h2>
+        <div id="chapterList">
+          <!-- Capítulos serão carregados aqui -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Galeria de Imagens -->
+    <div class="image-gallery" id="imageGallery">
+      <!-- Imagens serão exibidas aqui -->
+    </div>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        // Centralização da URL base
+        const BASE_URL = "http://localhost:3000";
+
+        // Definição dos endpoints
+        const ENDPOINTS = {
+          listMangas: `${BASE_URL}/mangas`,
+          getManga: (id) => `${BASE_URL}/mangas/${id}`,
+          listChapters: (mangaId, page = 1) =>
+            `${BASE_URL}/mangas/${mangaId}/chapters?page=${page}`,
+          createChapter: (mangaId) => `${BASE_URL}/mangas/${mangaId}/chapters`,
+          getImages: (chapterId) => `${BASE_URL}/chapters/${chapterId}/images`,
+        };
+
+        const mangaListElement = document.getElementById("mangaList");
+        const chapterListElement = document.getElementById("chapterList");
+        const imageGalleryElement = document.getElementById("imageGallery");
+        const uploadForm = document.getElementById("uploadForm");
+        const formMessage = document.getElementById("formMessage");
+
+        let selectedMangaId = null;
+        let selectedChapterId = null;
+
+        // Função para exibir mensagens
+        function showMessage(element, message, type) {
+          element.innerHTML = `<div class="message ${type}">${message}</div>`;
+          setTimeout(() => {
+            element.innerHTML = "";
+          }, 5000);
+        }
+
+        // Função para exibir indicador de carregamento
+        function showLoading(element, message = "Carregando...") {
+          element.innerHTML = `<div class="loading">${message}</div>`;
+        }
+
+        // Carregar Mangás
+        async function loadMangas() {
+          try {
+            showLoading(mangaListElement, "Carregando mangás...");
+            const response = await fetch(ENDPOINTS.listMangas);
+            if (!response.ok) throw new Error("Erro ao carregar mangás.");
+            const mangas = await response.json();
+
+            mangaListElement.innerHTML = "";
+            if (mangas.length === 0) {
+              mangaListElement.innerHTML = "<p>Nenhum mangá encontrado.</p>";
+              return;
+            }
+
+            mangas.forEach((manga) => {
+              const div = document.createElement("div");
+              div.classList.add("manga-item");
+              div.textContent = manga.name;
+              div.dataset.id = manga.id;
+              div.addEventListener("click", () =>
+                selectManga(manga.id, manga.name)
+              );
+              mangaListElement.appendChild(div);
+            });
+          } catch (error) {
+            showMessage(formMessage, error.message, "error");
+            console.error("Erro em loadMangas:", error);
+          }
+        }
+
+        // Selecionar Mangá
+        async function selectManga(mangaId, mangaName) {
+          selectedMangaId = mangaId;
+          selectedChapterId = null;
+          imageGalleryElement.innerHTML = "";
+          chapterListElement.innerHTML = `<h3>Capítulos de "${mangaName}"</h3>`;
+
+          try {
+            showLoading(chapterListElement, "Carregando capítulos...");
+            const response = await fetch(ENDPOINTS.listChapters(mangaId));
+            if (!response.ok) throw new Error("Erro ao carregar capítulos.");
+            const data = await response.json();
+
+            // Verificar se a resposta contém capítulos
+            if (!data.chapters || !Array.isArray(data.chapters)) {
+              throw new Error(
+                "Formato de resposta inesperado ao listar capítulos."
+              );
+            }
+
+            const chapters = data.chapters;
+            chapterListElement.innerHTML = `<h3>Capítulos de "${mangaName}"</h3>`;
+
+            if (chapters.length === 0) {
+              chapterListElement.innerHTML +=
+                "<p>Nenhum capítulo encontrado para este mangá.</p>";
+              return;
+            }
+
+            const list = document.createElement("div");
+            chapters.forEach((chapter) => {
+              const div = document.createElement("div");
+              div.classList.add("chapter-item");
+              div.textContent = `Capítulo ${chapter.number}: ${chapter.title}`;
+              div.dataset.id = chapter.id;
+              div.addEventListener("click", () =>
+                selectChapter(chapter.id, chapter.title)
+              );
+              list.appendChild(div);
+            });
+
+            // Paginação (opcional)
+            if (data.pagination && data.pagination.lastPage > 1) {
+              const paginationDiv = document.createElement("div");
+              paginationDiv.classList.add("pagination");
+
+              if (data.pagination.prevPage) {
+                const prevButton = document.createElement("button");
+                prevButton.textContent = "Anterior";
+                prevButton.addEventListener("click", () =>
+                  loadChaptersPage(mangaId, data.pagination.prevPage)
+                );
+                paginationDiv.appendChild(prevButton);
+              }
+
+              if (data.pagination.nextPage) {
+                const nextButton = document.createElement("button");
+                nextButton.textContent = "Próxima";
+                nextButton.addEventListener("click", () =>
+                  loadChaptersPage(mangaId, data.pagination.nextPage)
+                );
+                paginationDiv.appendChild(nextButton);
+              }
+
+              list.appendChild(paginationDiv);
+            }
+
+            chapterListElement.appendChild(list);
+          } catch (error) {
+            showMessage(formMessage, error.message, "error");
+            console.error("Erro em selectManga:", error);
+          }
+        }
+
+        // Carregar uma página específica de capítulos (para paginação)
+        async function loadChaptersPage(mangaId, page) {
+          try {
+            showLoading(chapterListElement, "Carregando capítulos...");
+            const response = await fetch(ENDPOINTS.listChapters(mangaId, page));
+            if (!response.ok) throw new Error("Erro ao carregar capítulos.");
+            const data = await response.json();
+
+            // Verificar se a resposta contém capítulos
+            if (!data.chapters || !Array.isArray(data.chapters)) {
+              throw new Error(
+                "Formato de resposta inesperado ao listar capítulos."
+              );
+            }
+
+            const chapters = data.chapters;
+            chapterListElement.innerHTML = `<h3>Capítulos (Página ${data.pagination.currentPage})</h3>`;
+
+            if (chapters.length === 0) {
+              chapterListElement.innerHTML +=
+                "<p>Nenhum capítulo encontrado para este mangá.</p>";
+              return;
+            }
+
+            const list = document.createElement("div");
+            chapters.forEach((chapter) => {
+              const div = document.createElement("div");
+              div.classList.add("chapter-item");
+              div.textContent = `Capítulo ${chapter.number}: ${chapter.title}`;
+              div.dataset.id = chapter.id;
+              div.addEventListener("click", () =>
+                selectChapter(chapter.id, chapter.title)
+              );
+              list.appendChild(div);
+            });
+
+            // Paginação (opcional)
+            if (data.pagination && data.pagination.lastPage > 1) {
+              const paginationDiv = document.createElement("div");
+              paginationDiv.classList.add("pagination");
+
+              if (data.pagination.prevPage) {
+                const prevButton = document.createElement("button");
+                prevButton.textContent = "Anterior";
+                prevButton.addEventListener("click", () =>
+                  loadChaptersPage(mangaId, data.pagination.prevPage)
+                );
+                paginationDiv.appendChild(prevButton);
+              }
+
+              if (data.pagination.nextPage) {
+                const nextButton = document.createElement("button");
+                nextButton.textContent = "Próxima";
+                nextButton.addEventListener("click", () =>
+                  loadChaptersPage(mangaId, data.pagination.nextPage)
+                );
+                paginationDiv.appendChild(nextButton);
+              }
+
+              list.appendChild(paginationDiv);
+            }
+
+            chapterListElement.appendChild(list);
+          } catch (error) {
+            showMessage(formMessage, error.message, "error");
+            console.error("Erro em loadChaptersPage:", error);
+          }
+        }
+
+        // Selecionar Capítulo
+        async function selectChapter(chapterId, chapterTitle) {
+          selectedChapterId = chapterId;
+          imageGalleryElement.innerHTML = `<h3>Imagens do "${chapterTitle}"</h3>`;
+
+          try {
+            showLoading(imageGalleryElement, "Carregando imagens...");
+            const response = await fetch(ENDPOINTS.getImages(chapterId));
+            if (!response.ok) throw new Error("Erro ao carregar imagens.");
+            const data = await response.json();
+
+            // Verificar se a resposta contém imagens
+            if (!data.images || !Array.isArray(data.images)) {
+              throw new Error(
+                "Formato de resposta inesperado ao listar imagens."
+              );
+            }
+
+            const images = data.images;
+            imageGalleryElement.innerHTML = `<h3>Imagens do "${chapterTitle}"</h3>`;
+
+            if (images.length === 0) {
+              imageGalleryElement.innerHTML +=
+                "<p>Nenhuma imagem encontrada para este capítulo.</p>";
+              return;
+            }
+
+            const gallery = document.createElement("div");
+            gallery.classList.add("image-gallery");
+
+            images.forEach((imageUrl) => {
+              const img = document.createElement("img");
+              img.src = imageUrl;
+              img.alt = `Imagem do capítulo "${chapterTitle}"`;
+              img.onerror = () => {
+                img.src =
+                  "https://via.placeholder.com/150?text=Imagem+Não+Encontrada"; // Imagem de placeholder
+                img.alt = "Imagem não encontrada";
+              };
+              gallery.appendChild(img);
+            });
+
+            imageGalleryElement.appendChild(gallery);
+          } catch (error) {
+            showMessage(formMessage, error.message, "error");
+            console.error("Erro em selectChapter:", error);
+          }
+        }
+
+        // Manipular Envio do Formulário
+        uploadForm.addEventListener("submit", async (e) => {
+          e.preventDefault();
+
+          if (!selectedMangaId) {
+            showMessage(
+              formMessage,
+              "Por favor, selecione um mangá primeiro.",
+              "error"
+            );
+            return;
+          }
+
+          const numberInput = document.getElementById("number");
+          const titleInput = document.getElementById("title");
+          const imagesInput = document.getElementById("images");
+
+          const number = numberInput.value.trim();
+          const title = titleInput.value.trim();
+          const files = imagesInput.files;
+
+          if (!number || !title || files.length === 0) {
+            showMessage(
+              formMessage,
+              "Todos os campos são obrigatórios.",
+              "error"
+            );
+            return;
+          }
+
+          // Validar se o número do capítulo é um número inteiro positivo
+          if (!/^\d+$/.test(number)) {
+            showMessage(
+              formMessage,
+              "Número do capítulo deve ser um número inteiro positivo.",
+              "error"
+            );
+            return;
+          }
+
+          const formData = new FormData();
+          formData.append("number", number);
+          formData.append("title", title);
+
+          for (let i = 0; i < files.length; i++) {
+            formData.append("images", files[i]);
+            console.log(`Adicionando imagem: ${files[i].name}`);
+          }
+
+          try {
+            showLoading(formMessage, "Enviando capítulo...");
+            const response = await fetch(
+              ENDPOINTS.createChapter(selectedMangaId),
+              {
+                method: "POST",
+                body: formData,
+              }
+            );
+
+            if (response.status === 201) {
+              showMessage(
+                formMessage,
+                "Capítulo criado com sucesso!",
+                "success"
+              );
+              uploadForm.reset();
+              loadMangas(); // Atualiza a lista de mangás
+              // Opcional: Recarregar capítulos do mangá selecionado
+              if (selectedMangaId) {
+                const selectedMangaName = document.querySelector(
+                  `.manga-item[data-id="${selectedMangaId}"]`
+                ).textContent;
+                selectManga(selectedMangaId, selectedMangaName);
+              }
+            } else {
+              const errorData = await response.json();
+              showMessage(
+                formMessage,
+                errorData.error || "Erro ao criar o capítulo.",
+                "error"
+              );
+              console.error("Erro ao criar capítulo:", errorData);
+            }
+          } catch (error) {
+            showMessage(
+              formMessage,
+              "Erro de conexão com o servidor.",
+              "error"
+            );
+            console.error("Erro em uploadForm submit:", error);
+          }
+        });
+
+        // Inicializar
+        loadMangas();
+      });
+    </script>
+  </body>
+</html>

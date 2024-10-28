@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider          = "sqlite"
-  url               = "file:./dev.db"
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
 }
 
 model Character {
@@ -32,3 +32,40 @@ model DomainExpansion {
   Character   Character? @relation(fields: [characterId], references: [id])
   characterId String?
 }
+
+
+model Manga {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  language  String
+  chapters  Chapter[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Chapter {
+  id        String   @id @default(cuid())
+  number    Int
+  title     String
+  manga     Manga    @relation(fields: [mangaId], references: [id])
+  mangaId   String
+  images    Image[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([mangaId, number])
+}
+
+model Image {
+  id        String   @id @default(cuid())
+  url       String
+  chapter   Chapter  @relation(fields: [chapterId], references: [id])
+  chapterId String
+  order     Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([chapterId, order])
+}
+
+

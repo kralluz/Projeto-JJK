@@ -4,8 +4,4 @@ import domainsExpansionController from '../controllers/domainExpansionsControlle
 export const domainExpansionsRoutes = Router();
 
 domainExpansionsRoutes.get('/domainExpansions', domainsExpansionController.listAllDomainsExpansion);
-domainExpansionsRoutes.get('/domainExpansions/:id', domainsExpansionController.listAllDomainsExpansion);
 domainExpansionsRoutes.post('/domainExpansion', domainsExpansionController.createDomainExpansion);
-domainExpansionsRoutes.get('/', (req: Request, res: Response) => {
-    return res.send("ok")
-});
